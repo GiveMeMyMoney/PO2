@@ -154,6 +154,7 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     private int commands; //TODO max repeat(commands) && wspolnie max undo(sigma[commands]) ORAZ wspolnie max redo(sigma[commands])
     boolean[][] canvas; //TODO poczatkowa wartosc moze byc jakakolwiek
     Pair<Integer, Integer> colRowCursor;
+    Pair<Integer, Integer> colRowCursorInitPosition;
 
     int pointerIndexList;
     List<Operation> operationList;
@@ -271,8 +272,12 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
             operation.getAffectedColRowIdx().forEach(colRow -> canvas[colRow.getKey()][colRow.getValue()] = false);
         }
 
-        Operation operation = operationList.get(pointerIndexList);
-        colRowCursor = operation.getColRowCursorPosition();
+        if (pointerIndexList < 0) {
+            colRowCursor = colRowCursorInitPosition;
+        } else {
+            Operation operation = operationList.get(pointerIndexList);
+            colRowCursor = operation.getColRowCursorPosition();
+        }
     }
 
     @Override
@@ -293,6 +298,7 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
 
     @Override
     public void setInitialPosition(int col, int row) {
+        colRowCursorInitPosition = new Pair<>(col, row);
         colRowCursor = new Pair<>(col, row);
         canvas[col][row] = true;
     }

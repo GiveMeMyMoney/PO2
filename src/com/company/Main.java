@@ -2,6 +2,7 @@ package com.company;
 
 import com.company.interfaces.ImageGeneratorConfigurationInterface;
 import com.company.interfaces.ImageGeneratorInterface;
+import com.company.interfaces.ImageGeneratorPenInterface;
 import javafx.util.Pair;
 
 import java.util.ArrayList;
@@ -11,7 +12,7 @@ public class Main {
 
     public static void main(String[] args) {
         ImageGenerator imageGenerator = new ImageGenerator();
-        boolean[][] canvas = {{false, false, false, false, false, false, false, false, false, false, false},
+        boolean[][] canvas = {{true, false, true, false, true, false, false, false, false, false, false},
                 {false, false, false, false, false, false, false, false, false, false, false},
                 {false, false, false, false, false, false, false, false, false, false, false},
                 {false, false, false, false, false, false, false, false, false, false, false},
@@ -21,14 +22,17 @@ public class Main {
                 {false, false, false, false, false, false, false, false, false, false, false},
                 {false, false, false, false, false, false, false, false, false, false, false},
                 {false, false, false, false, false, false, false, false, false, false, false},
-                {false, false, false, false, false, false, false, false, false, false, false}};
+                {false, false, false, false, false, false, false, false, false, false, true}};
         imageGenerator.setCanvas(canvas);
-        imageGenerator.setInitialPosition(2, 0);
+        imageGenerator.setInitialPosition(0, 0);
 
         imageGenerator.up(4);
-        imageGenerator.right(3);
-        imageGenerator.down(2);
-        imageGenerator.repeat(3);
+        imageGenerator.undo(1);
+        imageGenerator.redo(1);
+        imageGenerator.undo(1);
+        imageGenerator.redo(1);
+        imageGenerator.right(10);
+        /*imageGenerator.repeat(3);
         imageGenerator.undo(2);
         imageGenerator.redo(1);
         imageGenerator.up(3);
@@ -38,9 +42,12 @@ public class Main {
         imageGenerator.left(1);
         imageGenerator.repeat(1);
         imageGenerator.undo(2);
-        imageGenerator.redo(1);
+        imageGenerator.redo(1);*/
 
         System.out.print(imageGenerator.toString());
+
+
+        System.out.println(canvas[5][1]);
     }
 }
 
@@ -49,7 +56,10 @@ enum ENameOperation {
     DOWN,
     RIGHT,
     LEFT,
-    REPEAT
+    REPEAT,
+    PEN_UP,
+    PEN_DOWN,
+    SET_COLOR
 }
 
 class Operation {
@@ -80,13 +90,16 @@ class Operation {
     }
 }
 
-class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGeneratorInterface {
+class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGeneratorInterface, ImageGeneratorPenInterface {
     private int commands; //TODO max repeat(commands) && wspolnie max undo(sigma[commands]) ORAZ wspolnie max redo(sigma[commands])
     boolean[][] canvas; //TODO poczatkowa wartosc moze byc jakakolwiek
     Pair<Integer, Integer> colRowCursor;
+    Pair<Integer, Integer> colRowCursorInitPosition;
 
     int pointerIndexList;
     List<Operation> operationList;
+
+    //acutal PEN_STATE oraz actual COLOR
 
     public ImageGenerator() {
         operationList = new ArrayList<>();
@@ -201,8 +214,12 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
             operation.getAffectedColRowIdx().forEach(colRow -> canvas[colRow.getKey()][colRow.getValue()] = false);
         }
 
-        Operation operation = operationList.get(pointerIndexList);
-        colRowCursor = operation.getColRowCursorPosition();
+        if (pointerIndexList < 0) {
+            colRowCursor = colRowCursorInitPosition;
+        } else {
+            Operation operation = operationList.get(pointerIndexList);
+            colRowCursor = operation.getColRowCursorPosition();
+        }
     }
 
     @Override
@@ -223,6 +240,7 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
 
     @Override
     public void setInitialPosition(int col, int row) {
+        colRowCursorInitPosition = new Pair<>(col, row);
         colRowCursor = new Pair<>(col, row);
         canvas[col][row] = true;
     }
@@ -231,6 +249,12 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     public void maxUndoRedoRepeatCommands(int commands) {
         this.commands = commands;
     }
+
+    //ImageGeneratorPenInterface
+
+
+
+
 
     @Override
     public String toString() {
