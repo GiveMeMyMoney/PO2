@@ -99,12 +99,38 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     int pointerIndexList;
     List<Operation> operationList;
 
-    //acutal PEN_STATE oraz actual COLOR
+    //TODO acutal PEN_STATE oraz actual COLOR
 
     public ImageGenerator() {
         operationList = new ArrayList<>();
         this.pointerIndexList = -1;
     }
+
+    //region ImageGeneratorPenInterface
+
+    @Override
+    public void setPenState(PenState state) {
+
+    }
+
+    @Override
+    public void setColor(boolean color) {
+
+    }
+
+    @Override
+    public PenState getPenState() {
+        return null;
+    }
+
+    @Override
+    public boolean getColor() {
+        return false;
+    }
+
+
+    //endregion
+
 
     // [][ROW=+STEPs]
     @Override
