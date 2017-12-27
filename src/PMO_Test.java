@@ -548,7 +548,7 @@ public class PMO_Test {
 		expected.add("..........");
 		expected.add("..........");
 		expected.add("..........");
-		setInitialState(2, 1, PEN_DOWN, false ); 
+		setInitialState(2, 1, PEN_DOWN, false );
 		// pioro jest opuszczone i setColor zmienia pozycje [2][1] na false
 		up(5);
 		right(5);
