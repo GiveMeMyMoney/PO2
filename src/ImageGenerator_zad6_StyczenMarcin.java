@@ -164,10 +164,9 @@ interface ImageGeneratorPenInterface {
 /**
  * Interfejs pozwalajacy doprecyzowac jakie slady zostawia na plotnie pisak
  * jesli jest w stanie DOWN i o okreslonym kolorze.
- *
  */
 interface ImageGeneratorPenStyleInterface {
-    public enum PenStyle {
+    enum PenStyle {
         SOLID {
             @Override
             public boolean value(boolean penColor, boolean canvasColor) {
@@ -203,10 +202,8 @@ interface ImageGeneratorPenStyleInterface {
          * Metoda zwraca wynik uzycia pisaka znajdujacego sie w stanie DOWN (!!) i o
          * kolorze penColor na plotno bedace w stanie canvasColor.
          *
-         * @param penColor
-         *            kolor pisaka
-         * @param canvasColor
-         *            kolor plotna
+         * @param penColor    kolor pisaka
+         * @param canvasColor kolor plotna
          * @return koncowy kolor plotna
          */
         public abstract boolean value(boolean penColor, boolean canvasColor);
@@ -215,8 +212,7 @@ interface ImageGeneratorPenStyleInterface {
     /**
      * Metoda ustawia styl piora
      *
-     * @param style
-     *            nowy styl piora
+     * @param style nowy styl piora
      */
     public void setPenStyle(PenStyle style);
 
@@ -238,33 +234,55 @@ enum ENameOperation {
     COLOR
 }
 
+class AffectedColRowIdxColor {
+    private Pair<Integer, Integer> affectedColRowIdx;
+    private boolean color;
+
+    public AffectedColRowIdxColor() {
+    }
+
+    public AffectedColRowIdxColor(Pair<Integer, Integer> affectedColRowIdx, boolean color) {
+        this.affectedColRowIdx = affectedColRowIdx;
+        this.color = color;
+    }
+
+    public Pair<Integer, Integer> getAffectedColRowIdx() {
+        return affectedColRowIdx;
+    }
+
+    public boolean getColor() {
+        return color;
+    }
+}
+
 class Operation {
     private Pair<ENameOperation, Integer> nameValuePair;
-    private List<Pair<Integer, Integer>> affectedColRowIdx;
-    private boolean affectedColRowIdxColor;
+    private List<AffectedColRowIdxColor> affectedColRowIdxs;
 
     private Pair<Integer, Integer> colRowCursorPosition;
 
-    public Operation(Pair<ENameOperation, Integer> nameValuePair, List<Pair<Integer, Integer>> affectedColRowIdx, boolean color) {
-        this.nameValuePair = nameValuePair;
-        this.affectedColRowIdx = affectedColRowIdx;
-        this.affectedColRowIdxColor = color;
+    public Operation() {
     }
 
-    public void setColRowCursorPosition(Pair<Integer, Integer> colRowCursorPosition) {
-        this.colRowCursorPosition = colRowCursorPosition;
+    public Operation(Pair<ENameOperation, Integer> nameValuePair, List<AffectedColRowIdxColor> affectedColRowIdxs) {
+        this.nameValuePair = nameValuePair;
+        this.affectedColRowIdxs = affectedColRowIdxs;
+    }
+
+    public Operation(List<AffectedColRowIdxColor> affectedColRowIdxs) {
+        this.affectedColRowIdxs = affectedColRowIdxs;
     }
 
     public Pair<ENameOperation, Integer> getNameValuePair() {
         return nameValuePair;
     }
 
-    public List<Pair<Integer, Integer>> getAffectedColRowIdx() {
-        return affectedColRowIdx;
+    public List<AffectedColRowIdxColor> getAffectedColRowIdxs() {
+        return affectedColRowIdxs;
     }
 
-    public boolean isAffectedColRowIdxColor() {
-        return affectedColRowIdxColor;
+    public void setColRowCursorPosition(Pair<Integer, Integer> colRowCursorPosition) {
+        this.colRowCursorPosition = colRowCursorPosition;
     }
 
     public Pair<Integer, Integer> getColRowCursorPosition() {
@@ -272,7 +290,26 @@ class Operation {
     }
 }
 
-class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGeneratorInterface, ImageGeneratorPenInterface {
+class OperationStyle extends Operation {
+    private ImageGeneratorPenStyleInterface.PenStyle newStyle;
+    private ImageGeneratorPenStyleInterface.PenStyle oldStyle;
+
+    public OperationStyle(ImageGeneratorPenStyleInterface.PenStyle newStyle, ImageGeneratorPenStyleInterface.PenStyle oldStyle, List<AffectedColRowIdxColor> affectedColRowIdxs) {
+        super(affectedColRowIdxs);
+        this.newStyle = newStyle;
+        this.oldStyle = oldStyle;
+    }
+
+    public ImageGeneratorPenStyleInterface.PenStyle getNewStyle() {
+        return newStyle;
+    }
+
+    public ImageGeneratorPenStyleInterface.PenStyle getOldStyle() {
+        return oldStyle;
+    }
+}
+
+class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGeneratorInterface, ImageGeneratorPenInterface, ImageGeneratorPenStyleInterface {
     private final ImageGeneratorPenInterface.PenState PEN_UP = ImageGeneratorPenInterface.PenState.UP;
     private final ImageGeneratorPenInterface.PenState PEN_DOWN = ImageGeneratorPenInterface.PenState.DOWN;
     private int commands; //TODO max repeat(commands) && wspolnie max undo(sigma[commands]) ORAZ wspolnie max redo(sigma[commands])
@@ -284,12 +321,54 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     List<Operation> operationList;
 
     ImageGeneratorPenInterface.PenState actualPenState;
+    ImageGeneratorPenStyleInterface.PenStyle actualStyle;
     boolean actualColor;
 
     public ImageGenerator() {
         operationList = new ArrayList<>();
         this.pointerIndexList = -1;
+
+        //stan poczatkowy obiektu
+        actualPenState = PEN_DOWN;
+        actualColor = true;
+        actualStyle = PenStyle.SOLID;
     }
+
+    private boolean getActualCanvasColor() {
+        return canvas[colRowCursor.getKey()][colRowCursor.getValue()];
+    }
+
+    //region ImageGeneratorPenStyleInterface
+
+    @Override
+    public void setPenStyle(PenStyle style) {
+        //actualStyle = style; //style - nowy styl, actualStyle - stary styl.
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
+
+        if (PEN_DOWN == actualPenState) {
+            boolean canvasColor = getActualCanvasColor(); //stara wartosc
+            canvas[colRowCursor.getKey()][colRowCursor.getValue()] = style.value(actualColor, canvasColor);
+            if (canvasColor != getActualCanvasColor()) {
+                AffectedColRowIdxColor affectedColRowIdxColor = new AffectedColRowIdxColor(colRowCursor, !canvasColor);
+                affectedColRowIdxList.add(affectedColRowIdxColor);
+            }
+        }
+
+        OperationStyle operation = new OperationStyle(style, actualStyle, affectedColRowIdxList); //style - nowy styl, actualStyle - stary styl.
+        operationList.add(++pointerIndexList, operation);
+
+        operation.setColRowCursorPosition(colRowCursor);
+
+        actualStyle = style;
+    }
+
+    @Override
+    public PenStyle getPenStyle() {
+        return actualStyle;
+    }
+
+    //endregion
 
     //region ImageGeneratorPenInterface
 
@@ -297,15 +376,20 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     public void setPenState(PenState state) {
         actualPenState = state;
 
-        List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
-        if (actualPenState == PEN_DOWN && canvas[colRowCursor.getKey()][colRowCursor.getValue()] != actualColor) {
-            canvas[colRowCursor.getKey()][colRowCursor.getValue()] = actualColor;
-            affectedColRowIdx.add(colRowCursor);
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
+        if (actualPenState == PEN_DOWN) {
+            boolean canvasColor = getActualCanvasColor(); //stara wartosc
+            canvas[colRowCursor.getKey()][colRowCursor.getValue()] = this.actualStyle.value(actualColor, canvasColor);
+            if (canvasColor != getActualCanvasColor()) {
+                AffectedColRowIdxColor affectedColRowIdxColor = new AffectedColRowIdxColor(colRowCursor, !canvasColor);
+                affectedColRowIdxList.add(affectedColRowIdxColor);
+            }
         }
 
         //state - DOWN = true = 1, UP = false = 0
         Integer stateInt = (state == PEN_DOWN) ? 1 : 0;
-        Operation operation = new Operation(new Pair<>(ENameOperation.PEN_STATE, stateInt), affectedColRowIdx, actualColor);
+        Operation operation = new Operation(new Pair<>(ENameOperation.PEN_STATE, stateInt), affectedColRowIdxList);
         operationList.add(++pointerIndexList, operation);
 
         operation.setColRowCursorPosition(colRowCursor);
@@ -314,19 +398,23 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     @Override
     public void setColor(boolean color) {
         actualColor = color;
-        List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
-        if (actualPenState == PEN_DOWN && canvas[colRowCursor.getKey()][colRowCursor.getValue()] != color) {
-            canvas[colRowCursor.getKey()][colRowCursor.getValue()] = color;
-            affectedColRowIdx.add(colRowCursor);
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
+        if (actualPenState == PEN_DOWN) {
+            boolean canvasColor = getActualCanvasColor(); //stara wartosc
+            canvas[colRowCursor.getKey()][colRowCursor.getValue()] = this.actualStyle.value(actualColor, canvasColor);
+            if (canvasColor != getActualCanvasColor()) {
+                AffectedColRowIdxColor affectedColRowIdxColor = new AffectedColRowIdxColor(colRowCursor, !canvasColor);
+                affectedColRowIdxList.add(affectedColRowIdxColor);
+            }
         }
 
         //color - true = 1, false = 0
         Integer colorInt = color ? 1 : 0;
-        Operation operation = new Operation(new Pair<>(ENameOperation.COLOR, colorInt), affectedColRowIdx, actualColor);
+        Operation operation = new Operation(new Pair<>(ENameOperation.COLOR, colorInt), affectedColRowIdxList);
         operationList.add(++pointerIndexList, operation);
 
         operation.setColRowCursorPosition(colRowCursor);
-
     }
 
     @Override
@@ -345,19 +433,22 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     // [][ROW=+STEPs]
     @Override
     public void up(int steps) {
-        List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
         if (actualPenState == PEN_DOWN) {
             for (int i = 1; i <= steps; i++) {
-                if (canvas[colRowCursor.getKey()][colRowCursor.getValue() + i] != actualColor) {
-                    canvas[colRowCursor.getKey()][colRowCursor.getValue() + i] = actualColor;
-                    affectedColRowIdx.add(new Pair<>(colRowCursor.getKey(), colRowCursor.getValue() + i));
+                Integer y = colRowCursor.getValue() + i;
+                boolean canvasColor = canvas[colRowCursor.getKey()][y]; //stara wartosc
+                canvas[colRowCursor.getKey()][y] = this.actualStyle.value(actualColor, canvasColor);
+                if (canvasColor != canvas[colRowCursor.getKey()][y]) {
+                    AffectedColRowIdxColor affectedColRowIdxColor = new AffectedColRowIdxColor(new Pair<>(colRowCursor.getKey(), y), !canvasColor);
+                    affectedColRowIdxList.add(affectedColRowIdxColor);
                 }
-
             }
         }
         colRowCursor = new Pair<>(colRowCursor.getKey(), colRowCursor.getValue() + steps);
 
-        Operation operation = new Operation(new Pair<>(ENameOperation.UP, steps), affectedColRowIdx, actualColor);
+        Operation operation = new Operation(new Pair<>(ENameOperation.UP, steps), affectedColRowIdxList);
         operationList.add(++pointerIndexList, operation);
 
         operation.setColRowCursorPosition(colRowCursor);
@@ -366,18 +457,22 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     // [][ROW=-STEPs]
     @Override
     public void down(int steps) {
-        List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
         if (actualPenState == PEN_DOWN) {
             for (int i = 1; i <= steps; i++) {
-                if (canvas[colRowCursor.getKey()][colRowCursor.getValue() - i] != actualColor) {
-                    canvas[colRowCursor.getKey()][colRowCursor.getValue() - i] = actualColor;
-                    affectedColRowIdx.add(new Pair<>(colRowCursor.getKey(), colRowCursor.getValue() - i));
+                Integer y = colRowCursor.getValue() - i;
+                boolean canvasColor = canvas[colRowCursor.getKey()][y]; //stara wartosc
+                canvas[colRowCursor.getKey()][y] = this.actualStyle.value(actualColor, canvasColor);
+                if (canvasColor != canvas[colRowCursor.getKey()][y]) {
+                    AffectedColRowIdxColor affectedColRowIdxColor = new AffectedColRowIdxColor(new Pair<>(colRowCursor.getKey(), y), !canvasColor);
+                    affectedColRowIdxList.add(affectedColRowIdxColor);
                 }
             }
         }
         colRowCursor = new Pair<>(colRowCursor.getKey(), colRowCursor.getValue() - steps);
 
-        Operation operation = new Operation(new Pair<>(ENameOperation.DOWN, steps), affectedColRowIdx, actualColor);
+        Operation operation = new Operation(new Pair<>(ENameOperation.DOWN, steps), affectedColRowIdxList);
         operationList.add(++pointerIndexList, operation);
 
         operation.setColRowCursorPosition(colRowCursor);
@@ -386,18 +481,22 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     // [COL=-STEP][]
     @Override
     public void left(int steps) {
-        List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
         if (actualPenState == PEN_DOWN) {
             for (int i = 1; i <= steps; i++) {
-                if (canvas[colRowCursor.getKey() - i][colRowCursor.getValue()] != actualColor) {
-                    canvas[colRowCursor.getKey() - i][colRowCursor.getValue()] = actualColor;
-                    affectedColRowIdx.add(new Pair<>(colRowCursor.getKey() - i, colRowCursor.getValue()));
+                Integer x = colRowCursor.getKey() - i;
+                boolean canvasColor = canvas[x][colRowCursor.getValue()]; //stara wartosc
+                canvas[x][colRowCursor.getValue()] = this.actualStyle.value(actualColor, canvasColor);
+                if (canvasColor != canvas[x][colRowCursor.getValue()]) {
+                    AffectedColRowIdxColor affectedColRowIdxColor = new AffectedColRowIdxColor(new Pair<>(x, colRowCursor.getValue()), !canvasColor);
+                    affectedColRowIdxList.add(affectedColRowIdxColor);
                 }
             }
         }
         colRowCursor = new Pair<>(colRowCursor.getKey() - steps, colRowCursor.getValue());
 
-        Operation operation = new Operation(new Pair<>(ENameOperation.LEFT, steps), affectedColRowIdx, actualColor);
+        Operation operation = new Operation(new Pair<>(ENameOperation.LEFT, steps), affectedColRowIdxList);
         operationList.add(++pointerIndexList, operation);
 
         operation.setColRowCursorPosition(colRowCursor);
@@ -406,18 +505,22 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     // [COL=+STEP][]
     @Override
     public void right(int steps) {
-        List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
         if (actualPenState == PEN_DOWN) {
             for (int i = 1; i <= steps; i++) {
-                if (canvas[colRowCursor.getKey() + i][colRowCursor.getValue()] != actualColor) {
-                    canvas[colRowCursor.getKey() + i][colRowCursor.getValue()] = actualColor;
-                    affectedColRowIdx.add(new Pair<>(colRowCursor.getKey() + i, colRowCursor.getValue()));
+                Integer x = colRowCursor.getKey() + i;
+                boolean canvasColor = canvas[x][colRowCursor.getValue()]; //stara wartosc
+                canvas[x][colRowCursor.getValue()] = this.actualStyle.value(actualColor, canvasColor);
+                if (canvasColor != canvas[x][colRowCursor.getValue()]) {
+                    AffectedColRowIdxColor affectedColRowIdxColor = new AffectedColRowIdxColor(new Pair<>(x, colRowCursor.getValue()), !canvasColor);
+                    affectedColRowIdxList.add(affectedColRowIdxColor);
                 }
             }
         }
         colRowCursor = new Pair<>(colRowCursor.getKey() + steps, colRowCursor.getValue());
 
-        Operation operation = new Operation(new Pair<>(ENameOperation.RIGHT, steps), affectedColRowIdx, actualColor);
+        Operation operation = new Operation(new Pair<>(ENameOperation.RIGHT, steps), affectedColRowIdxList);
         operationList.add(++pointerIndexList, operation);
 
         operation.setColRowCursorPosition(colRowCursor);
@@ -426,33 +529,42 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     // zapisujemy w stosie zadan
     @Override
     public void repeat(int commands) {
-        List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        //List<Pair<Integer, Integer>> affectedColRowIdx = new ArrayList<>();
+        List<AffectedColRowIdxColor> affectedColRowIdxList = new ArrayList<>();
         pointerIndexList -= commands - 1;
         for (int i = 0; i < commands; i++) {
-            Pair<ENameOperation, Integer> idxOperation = operationList.get(pointerIndexList).getNameValuePair();
-            if (ENameOperation.UP == idxOperation.getKey()) {
-                up(idxOperation.getValue());
-            } else if (ENameOperation.DOWN == idxOperation.getKey()) {
-                down(idxOperation.getValue());
-            } else if (ENameOperation.LEFT == idxOperation.getKey()) {
-                left(idxOperation.getValue());
-            } else if (ENameOperation.RIGHT == idxOperation.getKey()) {
-                right(idxOperation.getValue());
-            } else if (ENameOperation.PEN_STATE == idxOperation.getKey()) {
-                PenState penState = (idxOperation.getValue() == 1) ? PEN_DOWN : PEN_UP;
-                setPenState(penState);
-            } else if (ENameOperation.COLOR == idxOperation.getKey()) {
-                setColor(idxOperation.getValue() == 1);
+            Operation operation = operationList.get(pointerIndexList);
+            //TODO sprawdzic
+            if (operation instanceof OperationStyle) {
+                OperationStyle operationStyle = (OperationStyle) operationList.get(pointerIndexList);
+                setPenStyle(operationStyle.getNewStyle());
+            } else {
+                Pair<ENameOperation, Integer> idxOperation = operation.getNameValuePair();
+                if (ENameOperation.UP == idxOperation.getKey()) {
+                    up(idxOperation.getValue());
+                } else if (ENameOperation.DOWN == idxOperation.getKey()) {
+                    down(idxOperation.getValue());
+                } else if (ENameOperation.LEFT == idxOperation.getKey()) {
+                    left(idxOperation.getValue());
+                } else if (ENameOperation.RIGHT == idxOperation.getKey()) {
+                    right(idxOperation.getValue());
+                } else if (ENameOperation.PEN_STATE == idxOperation.getKey()) {
+                    PenState penState = (idxOperation.getValue() == 1) ? PEN_DOWN : PEN_UP;
+                    setPenState(penState);
+                } else if (ENameOperation.COLOR == idxOperation.getKey()) {
+                    setColor(idxOperation.getValue() == 1);
+                }
             }
 
             //nie powielamy w operationList przy repeat
-            Operation operation = operationList.get(pointerIndexList);
-            affectedColRowIdx.addAll(operation.getAffectedColRowIdx());
+            Operation operationTemp = operationList.get(pointerIndexList);
+            affectedColRowIdxList.addAll(operationTemp.getAffectedColRowIdxs());
             operationList.remove(pointerIndexList);
         }
 
         //ew. problem z actualColor, bo tutaj moze raz malowac na false, raz na true
-        Operation operation = new Operation(new Pair<>(ENameOperation.REPEAT, commands), affectedColRowIdx, actualColor);
+        // - problem chyba znikl przy zmianach dla PO6
+        Operation operation = new Operation(new Pair<>(ENameOperation.REPEAT, commands), affectedColRowIdxList);
         operationList.add(pointerIndexList, operation);
 
         operation.setColRowCursorPosition(colRowCursor);
@@ -462,22 +574,24 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     public void undo(int commands) {
         for (int i = 0; i < commands; i++, pointerIndexList--) {
             Operation operation = operationList.get(pointerIndexList);
-            boolean affectedColor = operation.isAffectedColRowIdxColor();
-            operation.getAffectedColRowIdx().forEach((colRow) -> {
-                if (affectedColor) {
-                    canvas[colRow.getKey()][colRow.getValue()] = false;
-                } else {
-                    canvas[colRow.getKey()][colRow.getValue()] = true;
-                }
+            //boolean affectedColor = operation.isAffectedColRowIdxColor();
+            operation.getAffectedColRowIdxs().forEach((colRowColor) -> {
+                canvas[colRowColor.getAffectedColRowIdx().getKey()][colRowColor.getAffectedColRowIdx().getValue()] = !colRowColor.getColor();
             });
 
             //NA ODWROT
             //mozliwy problem gdy np 2x setColor(true) - nie wiem czy to nie jest niedopuszczalne
-            if (ENameOperation.COLOR == operation.getNameValuePair().getKey()) {
-                actualColor = !(operation.getNameValuePair().getValue() == 1);
-            }
-            if (ENameOperation.PEN_STATE == operation.getNameValuePair().getKey()) {
-                actualPenState = (operation.getNameValuePair().getValue() == 1) ? PEN_UP : PEN_DOWN;
+            //TODO sprawdzic
+            if (operation instanceof OperationStyle) {
+                OperationStyle operationStyle = (OperationStyle) operation;
+                actualStyle = operationStyle.getOldStyle();
+            } else {
+                if (ENameOperation.COLOR == operation.getNameValuePair().getKey()) {
+                    actualColor = !(operation.getNameValuePair().getValue() == 1);
+                }
+                if (ENameOperation.PEN_STATE == operation.getNameValuePair().getKey()) {
+                    actualPenState = (operation.getNameValuePair().getValue() == 1) ? PEN_UP : PEN_DOWN;
+                }
             }
         }
 
@@ -493,21 +607,22 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     public void redo(int commands) {
         for (int i = 0; i < commands; i++) {
             Operation operation = operationList.get(++pointerIndexList);
-            boolean affectedColor = operation.isAffectedColRowIdxColor();
-            operation.getAffectedColRowIdx().forEach((colRow) -> {
-                if (affectedColor) {
-                    canvas[colRow.getKey()][colRow.getValue()] = true;
-                } else {
-                    canvas[colRow.getKey()][colRow.getValue()] = false;
-                }
+            //boolean affectedColor = operation.isAffectedColRowIdxColor();
+            operation.getAffectedColRowIdxs().forEach((colRowColor) -> {
+                canvas[colRowColor.getAffectedColRowIdx().getKey()][colRowColor.getAffectedColRowIdx().getValue()] = colRowColor.getColor();
             });
 
             //mozliwy problem gdy np 2x setColor(true) - nie wiem czy to nie jest niedopuszczalne
-            if (ENameOperation.COLOR == operation.getNameValuePair().getKey()) {
-                actualColor = operation.getNameValuePair().getValue() == 1;
-            }
-            if (ENameOperation.PEN_STATE == operation.getNameValuePair().getKey()) {
-                actualPenState = operation.getNameValuePair().getValue() == 1 ? PEN_DOWN : PEN_UP;
+            if (operation instanceof OperationStyle) {
+                OperationStyle operationStyle = (OperationStyle) operation;
+                actualStyle = operationStyle.getNewStyle();
+            } else {
+                if (ENameOperation.COLOR == operation.getNameValuePair().getKey()) {
+                    actualColor = operation.getNameValuePair().getValue() == 1;
+                }
+                if (ENameOperation.PEN_STATE == operation.getNameValuePair().getKey()) {
+                    actualPenState = operation.getNameValuePair().getValue() == 1 ? PEN_DOWN : PEN_UP;
+                }
             }
         }
 
@@ -524,9 +639,7 @@ class ImageGenerator implements ImageGeneratorConfigurationInterface, ImageGener
     public void setInitialPosition(int col, int row) {
         colRowCursorInitPosition = new Pair<>(col, row);
         colRowCursor = new Pair<>(col, row);
-        actualPenState = PEN_UP;
-        actualColor = true;
-        canvas[col][row] = false;
+        canvas[col][row] = true;
     }
 
     @Override
